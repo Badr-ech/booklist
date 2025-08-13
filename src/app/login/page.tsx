@@ -27,6 +27,10 @@ export default function LoginPage() {
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return;
+    }
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({
@@ -53,7 +57,7 @@ export default function LoginPage() {
       
       const res = await handleGoogleSignIn({ uid: user.uid, email: user.email });
       if (!res.success) {
-        setError(res.error);
+        setError(res.error || 'An error occurred during Google sign in.');
         return;
       }
 

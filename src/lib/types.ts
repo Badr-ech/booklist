@@ -108,3 +108,116 @@ export interface UserActivity {
   timestamp: Timestamp;
   isPublic: boolean;
 }
+
+export interface UserFollow {
+  id: string;
+  followerId: string; // User who is following
+  followedId: string; // User being followed
+  followerEmail: string;
+  followedEmail: string;
+  followerUsername?: string;
+  followedUsername?: string;
+  createdAt: Timestamp;
+}
+
+export interface FollowStats {
+  followersCount: number;
+  followingCount: number;
+}
+
+export interface CustomList {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  isPublic: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  bookCount: number;
+}
+
+export interface CustomListBook {
+  id: string;
+  listId: string;
+  bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  bookCover: string;
+  bookGenre: string;
+  addedAt: Timestamp;
+  note?: string;
+}
+
+export interface BookNote {
+  id: string;
+  userId: string;
+  bookId: string;
+  bookTitle: string;
+  bookCover: string;
+  noteType: 'note' | 'quote';
+  content: string;
+  pageNumber?: number;
+  chapter?: string;
+  isPrivate: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  tags?: string[];
+}
+
+export interface ReadingHistoryEntry {
+  id: string;
+  userId: string;
+  bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  bookCover: string;
+  bookGenre: string;
+  status: BookStatus;
+  rating?: number;
+  startDate?: Timestamp;
+  endDate?: Timestamp;
+  dateAdded: Timestamp;
+  readingDuration?: number; // in days
+  pagesRead?: number;
+}
+
+export interface MoodTag {
+  id: string;
+  name: string;
+  category: 'mood' | 'theme' | 'setting' | 'pace';
+  description?: string;
+  color?: string;
+}
+
+export interface BookMoodTag {
+  bookId: string;
+  tagId: string;
+  votes: number;
+  addedBy: string[];
+}
+
+export interface ThemePreference {
+  mode: 'light' | 'dark' | 'system';
+  primaryColor?: string;
+  accentColor?: string;
+  fontSize?: 'small' | 'medium' | 'large';
+  reduceMotion?: boolean;
+}
+
+export interface UserPreferences {
+  userId: string;
+  theme: ThemePreference;
+  privacy: {
+    showProfile: boolean;
+    showReadingActivity: boolean;
+    showCustomLists: boolean;
+    allowDirectMessages: boolean;
+  };
+  notifications: {
+    emailDigest: boolean;
+    newFollowers: boolean;
+    bookRecommendations: boolean;
+    challengeUpdates: boolean;
+  };
+  updatedAt: Timestamp;
+}

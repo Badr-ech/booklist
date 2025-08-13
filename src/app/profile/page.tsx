@@ -23,11 +23,15 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ReadingStatsDisplay } from '@/components/reading-stats-display';
 import { ReadingGoalManager } from '@/components/reading-goal-manager';
+import { ActivityHelpers } from '@/lib/activity';
+import { CustomListManager } from '@/components/custom-list-manager';
 import type { Book, UserProfile, ReadingStats } from '@/lib/types';
 import { calculateReadingStats } from '@/lib/reading-stats';
-import { BookOpenCheck, Star, TrendingUp, User, Settings } from 'lucide-react';
+import { BookOpenCheck, Star, TrendingUp, User, Settings, Users, BookOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FollowList } from '@/components/follow-list';
+import { UserSearch } from '@/components/user-search';
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
@@ -135,6 +139,9 @@ export default function ProfilePage() {
     });
     setProfile((prev) => (prev ? { ...prev, readingGoal: goal } : null));
     setReadingGoal(goal);
+    
+    // Track activity for goal update
+    await ActivityHelpers.goalUpdated(user.uid);
   };
 
   const handleSaveChanges = async () => {
@@ -234,7 +241,7 @@ export default function ProfilePage() {
 
         {profile ? (
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
                 Overview
@@ -242,6 +249,14 @@ export default function ProfilePage() {
               <TabsTrigger value="stats" className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 Statistics
+              </TabsTrigger>
+              <TabsTrigger value="lists" className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4" />
+                Lists
+              </TabsTrigger>
+              <TabsTrigger value="social" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Social
               </TabsTrigger>
               <TabsTrigger value="settings" className="flex items-center gap-2">
                 <Settings className="h-4 w-4" />
@@ -340,6 +355,17 @@ export default function ProfilePage() {
 
             <TabsContent value="stats" className="space-y-6">
               <ReadingStatsDisplay stats={stats} profile={profile} />
+            </TabsContent>
+
+            <TabsContent value="lists" className="space-y-6">
+              <CustomListManager />
+            </TabsContent>
+
+            <TabsContent value="social" className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <UserSearch />
+                {user && <FollowList userId={user.uid} showStats={true} />}
+              </div>
             </TabsContent>
 
             <TabsContent value="settings" className="space-y-6">

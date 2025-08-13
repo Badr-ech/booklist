@@ -19,6 +19,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { googleBooksService } from '@/lib/google-books-service';
 
 const GENRES = [
   'All Genres', 'Fiction', 'Fantasy', 'Romance', 'Science Fiction', 'Mystery', 
@@ -80,46 +81,16 @@ export default function SearchPage() {
     const fetchBooks = async () => {
       setLoading(true);
       try {
-        // Build query based on filters
-        let query = debouncedSearchTerm;
-        if (filters.genre !== 'All Genres') {
-          query += `+subject:${filters.genre}`;
-        }
-
-        const response = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&orderBy=${filters.sortBy === 'relevance' ? 'relevance' : 'newest'}&key=${process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY}`
-        );
-        const data = await response.json();
-        
-        const items: BookSearchResult[] = data.items?.map((item: any) => {
-          const publishedDate = item.volumeInfo.publishedDate;
-          const year = publishedDate ? new Date(publishedDate).getFullYear() : null;
-          
-          return {
-            id: item.id,
-            title: item.volumeInfo.title,
-            author: item.volumeInfo.authors?.[0] || 'Unknown Author',
-            coverImage: item.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:') || 'https://placehold.co/300x450.png',
-            description: item.volumeInfo.description,
-            genre: item.volumeInfo.categories?.[0] || 'Uncategorized',
-            status: 'plan-to-read',
-            publishedDate: publishedDate,
-            averageRating: item.volumeInfo.averageRating || 0,
-            ratingsCount: item.volumeInfo.ratingsCount || 0,
-            pageCount: item.volumeInfo.pageCount,
-            publisher: item.volumeInfo.publisher,
-            language: item.volumeInfo.language || 'en'
-          };
-        }) || [];
-        
-        setSearchResults(items);
+        const results = await googleBooksService.searchBooks(debouncedSearchTerm, filters);
+        setSearchResults(results);
       } catch (error) {
         console.error('Error fetching books:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to fetch books from Google Books API.',
+          title: 'Search Error',
+          description: 'Failed to search books. Please try again.',
           variant: 'destructive',
         });
+        setSearchResults([]);
       } finally {
         setLoading(false);
       }

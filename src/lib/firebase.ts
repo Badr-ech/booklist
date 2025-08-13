@@ -1,5 +1,5 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -12,8 +12,17 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase for SSR
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// Validate configuration
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+    console.error('❌ Firebase configuration is incomplete. Please check your .env.local file.');
+    console.error('Missing:', {
+        apiKey: !firebaseConfig.apiKey,
+        projectId: !firebaseConfig.projectId,
+    });
+}
+
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
 const db = getFirestore(app);
 

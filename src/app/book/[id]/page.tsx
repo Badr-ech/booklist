@@ -9,8 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { Book, BookReview, BookStats } from '@/lib/types';
+import { ActivityHelpers } from '@/lib/activity';
+import { updateBookPopularity } from '@/lib/trending';
 import { Star, BookOpen, Users, MessageSquare, Plus, Edit3 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -30,17 +32,21 @@ import {
 } from 'firebase/firestore';
 import Image from 'next/image';
 import { AddBookModal } from '@/components/add-book-modal';
+import { AddToCustomList } from '@/components/add-to-custom-list';
 import type { BookClient } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookCard } from '@/components/book-card';
+import { getMockBookById, MOCK_BOOKS } from '@/lib/mock-books';
+import { googleBooksService } from '@/lib/google-books-service';
 
 interface BookDetailsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function BookDetailsPage({ params }: BookDetailsPageProps) {
+  const resolvedParams = use(params);
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -56,55 +62,39 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
 
   useEffect(() => {
     const fetchBookDetails = async () => {
-      if (!params.id) return;
+      if (!resolvedParams.id) return;
       
       setLoading(true);
       try {
-        // First try to get from Google Books API
-        const response = await fetch(
-          `https://www.googleapis.com/books/v1/volumes/${params.id}?key=${process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY}`
-        );
-        const data = await response.json();
+        const bookData = await googleBooksService.getBookDetails(resolvedParams.id);
         
-        if (data.error) {
-          throw new Error('Book not found');
-        }
+        if (bookData) {
+          setBook(bookData);
 
-        const bookData: Book = {
-          id: data.id,
-          title: data.volumeInfo.title,
-          author: data.volumeInfo.authors?.[0] || 'Unknown Author',
-          coverImage: data.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/300x450.png',
-          description: data.volumeInfo.description,
-          genre: data.volumeInfo.categories?.[0] || 'Uncategorized',
-          status: 'plan-to-read',
-        };
-
-        setBook(bookData);
-
-        // Get user's copy of this book if it exists
-        if (user) {
-          const userBookRef = doc(db, 'users', user.uid, 'books', params.id);
-          const userBookSnap = await getDoc(userBookRef);
-          if (userBookSnap.exists()) {
-            setUserBook({ id: userBookSnap.id, ...userBookSnap.data() } as Book);
+          // Get user's copy of this book if it exists
+          if (user) {
+            const userBookRef = doc(db, 'users', user.uid, 'books', resolvedParams.id);
+            const userBookSnap = await getDoc(userBookRef);
+            if (userBookSnap.exists()) {
+              setUserBook({ id: userBookSnap.id, ...userBookSnap.data() } as Book);
+            }
           }
-        }
 
-        // Get book statistics
-        await fetchBookStats();
-        
-        // Get reviews
-        await fetchReviews();
-        
-        // Get similar books
-        await fetchSimilarBooks(bookData.genre, bookData.title);
+          // Get book statistics
+          await fetchBookStats();
+          
+          // Get reviews
+          await fetchReviews();
+          
+          // Get similar books
+          await fetchSimilarBooks(bookData.genre, bookData.title);
+        }
 
       } catch (error) {
         console.error('Error fetching book details:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load book details.',
+          description: 'Failed to load book details. Please try again.',
           variant: 'destructive',
         });
       } finally {
@@ -113,11 +103,11 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
     };
 
     fetchBookDetails();
-  }, [params.id, user, toast]);
+  }, [resolvedParams.id, user, toast]);
 
   const fetchBookStats = async () => {
     try {
-      const statsRef = doc(db, 'bookStats', params.id);
+      const statsRef = doc(db, 'bookStats', resolvedParams.id);
       const statsSnap = await getDoc(statsRef);
       
       if (statsSnap.exists()) {
@@ -147,7 +137,7 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
     const reviewsRef = collection(db, 'reviews');
     const q = query(
       reviewsRef, 
-      where('bookId', '==', params.id),
+      where('bookId', '==', resolvedParams.id),
       orderBy('createdAt', 'desc')
     );
     
@@ -162,78 +152,63 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
 
   const fetchSimilarBooks = async (genre: string, title?: string) => {
     try {
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY;
+      
+      if (!apiKey) {
+        console.warn('Google Books API key not configured, using mock similar books');
+        // Return mock similar books
+        const similarBooks = MOCK_BOOKS
+          .filter(book => book.id !== resolvedParams.id && book.genre === genre)
+          .slice(0, 6);
+        setSimilarBooks(similarBooks);
+        return;
+      }
+      
       const similarBooks: Book[] = [];
       
       // Strategy 1: Search by keywords extracted from title and description
       const searchKeywords = extractKeywords(title || '', book?.description || '');
       if (searchKeywords.length > 0) {
-        for (const keyword of searchKeywords.slice(0, 3)) { // Try top 3 keywords
-          const keywordResponse = await fetch(
-            `https://www.googleapis.com/books/v1/volumes?q="${encodeURIComponent(keyword)}"&orderBy=relevance&maxResults=6&key=${process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY}`
-          );
-          const keywordData = await keywordResponse.json();
-          if (keywordData.items) {
-            const keywordBooks = keywordData.items.map((item: any) => ({
-              id: item.id,
-              title: item.volumeInfo.title,
-              author: item.volumeInfo.authors?.[0] || 'Unknown Author',
-              coverImage: item.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/300x450.png',
-              description: item.volumeInfo.description,
-              genre: item.volumeInfo.categories?.[0] || genre,
-              status: 'plan-to-read',
-            }));
-            similarBooks.push(...keywordBooks);
+        for (const keyword of searchKeywords.slice(0, 2)) { // Try top 2 keywords
+          try {
+            const keywordResponse = await fetch(
+              `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(keyword)}&orderBy=relevance&maxResults=4&key=${apiKey}`
+            );
+            if (keywordResponse.ok) {
+              const keywordData = await keywordResponse.json();
+              if (keywordData.items) {
+                const keywordBooks = keywordData.items.map((item: any) => ({
+                  id: item.id,
+                  title: item.volumeInfo.title || 'Unknown Title',
+                  author: item.volumeInfo.authors?.[0] || 'Unknown Author',
+                  coverImage: item.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:') || 'https://placehold.co/300x450.png',
+                  description: item.volumeInfo.description,
+                  genre: item.volumeInfo.categories?.[0] || genre,
+                  status: 'plan-to-read',
+                }));
+                similarBooks.push(...keywordBooks);
+              }
+            }
+          } catch (error) {
+            console.warn('Error fetching keyword books:', error);
           }
         }
       }
 
-      // Strategy 2: Genre-specific search with better terms
-      if (genre && genre !== 'Uncategorized') {
-        const genreKeywords = getGenreSpecificTerms(genre);
-        for (const term of genreKeywords) {
-          const genreResponse = await fetch(
-            `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(term)}&orderBy=relevance&maxResults=6&key=${process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY}`
-          );
-          const genreData = await genreResponse.json();
-          if (genreData.items) {
-            const genreBooks = genreData.items.map((item: any) => ({
-              id: item.id,
-              title: item.volumeInfo.title,
-              author: item.volumeInfo.authors?.[0] || 'Unknown Author',
-              coverImage: item.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/300x450.png',
-              description: item.volumeInfo.description,
-              genre: item.volumeInfo.categories?.[0] || genre,
-              status: 'plan-to-read',
-            }));
-            similarBooks.push(...genreBooks);
-          }
-        }
-      }
-
-      // Strategy 3: Author's other works
-      if (book?.author && book.author !== 'Unknown Author') {
-        const authorResponse = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=inauthor:"${encodeURIComponent(book.author)}"&maxResults=4&key=${process.env.NEXT_PUBLIC_GOOGLE_BOOKS_API_KEY}`
-        );
-        const authorData = await authorResponse.json();
-        if (authorData.items) {
-          const authorBooks = authorData.items.map((item: any) => ({
-            id: item.id,
-            title: item.volumeInfo.title,
-            author: item.volumeInfo.authors?.[0] || 'Unknown Author',
-            coverImage: item.volumeInfo.imageLinks?.thumbnail || 'https://placehold.co/300x450.png',
-            description: item.volumeInfo.description,
-            genre: item.volumeInfo.categories?.[0] || genre,
-            status: 'plan-to-read',
-          }));
-          similarBooks.push(...authorBooks);
-        }
+      // If API calls failed or returned no results, use mock data
+      if (similarBooks.length === 0) {
+        console.warn('Google Books API failed for similar books, using mock data');
+        const mockSimilarBooks = MOCK_BOOKS
+          .filter(book => book.id !== resolvedParams.id)
+          .slice(0, 6);
+        setSimilarBooks(mockSimilarBooks);
+        return;
       }
 
       // Remove duplicates and current book, then score by relevance
       const uniqueBooks = similarBooks
         .filter((item, index, self) => 
-          item.id !== params.id && 
+          item.id !== resolvedParams.id && 
           index === self.findIndex(b => b.id === item.id)
         )
         .map(book => ({
@@ -246,7 +221,11 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
       setSimilarBooks(uniqueBooks);
     } catch (error) {
       console.error('Error fetching similar books:', error);
-      setSimilarBooks([]);
+      // Fallback to mock data
+      const mockSimilarBooks = MOCK_BOOKS
+        .filter(book => book.id !== resolvedParams.id)
+        .slice(0, 6);
+      setSimilarBooks(mockSimilarBooks);
     }
   };
 
@@ -347,6 +326,18 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
       // Update global book stats
       await updateBookStats(details.status, details.rating);
 
+      // Update book popularity tracking
+      await updateBookPopularity(
+        book.id,
+        {
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          genre: book.genre,
+        },
+        details.rating
+      );
+
       setUserBook(bookToAdd);
       toast({
         title: 'Book Added!',
@@ -364,7 +355,7 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
   };
 
   const updateBookStats = async (status: string, rating?: number) => {
-    const statsRef = doc(db, 'bookStats', params.id);
+    const statsRef = doc(db, 'bookStats', resolvedParams.id);
     
     try {
       const statsSnap = await getDoc(statsRef);
@@ -411,7 +402,7 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
     try {
       const reviewsRef = collection(db, 'reviews');
       await addDoc(reviewsRef, {
-        bookId: params.id,
+        bookId: resolvedParams.id,
         userId: user.uid,
         userEmail: user.email,
         review: reviewText.trim(),
@@ -420,7 +411,7 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
       });
 
       // Update review count in stats
-      const statsRef = doc(db, 'bookStats', params.id);
+      const statsRef = doc(db, 'bookStats', resolvedParams.id);
       const statsSnap = await getDoc(statsRef);
       if (statsSnap.exists()) {
         const currentStats = statsSnap.data() as BookStats;
@@ -428,6 +419,15 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
           totalReviews: currentStats.totalReviews + 1,
         });
       }
+
+      // Track activity for posting review
+      await ActivityHelpers.reviewPosted(
+        user.uid,
+        resolvedParams.id,
+        book?.title || 'Unknown Book',
+        book?.coverImage,
+        reviewText.trim()
+      );
 
       setReviewText('');
       toast({
@@ -574,6 +574,17 @@ export default function BookDetailsPage({ params }: BookDetailsPageProps) {
                           <Edit3 className="w-4 h-4 mr-2" />
                           Edit Entry
                         </Button>
+                      )}
+                      {user && (
+                        <AddToCustomList
+                          book={{
+                            id: book.id,
+                            title: book.title,
+                            author: book.author,
+                            coverImage: book.coverImage,
+                            genre: book.genre
+                          }}
+                        />
                       )}
                     </div>
                   </div>

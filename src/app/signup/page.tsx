@@ -78,7 +78,7 @@ export default function SignupPage() {
       
       const res = await handleGoogleSignIn({ uid: user.uid, email: user.email });
       if (!res.success) {
-        setError(res.error);
+        setError(res.error || 'Authentication failed');
         return;
       }
 

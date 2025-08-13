@@ -1,0 +1,56 @@
+{
+  "name": "YourBookList",
+  "short_name": "BookList",
+  "description": "A comprehensive book tracking and recommendation platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F2F5",
+  "theme_color": "#4369B2",
+  "orientation": "portrait-primary",
+  "categories": ["books", "lifestyle", "education"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Book",
+      "short_name": "Add Book",
+      "description": "Quickly add a book to your library",
+      "url": "/search",
+      "icons": [{ "src": "/favicon.ico", "sizes": "16x16" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your book collection",
+      "url": "/dashboard",
+      "icons": [{ "src": "/favicon.ico", "sizes": "16x16" }]
+    },
+    {
+      "name": "Recommendations",
+      "short_name": "Recommendations",
+      "description": "Discover new books",
+      "url": "/recommendations",
+      "icons": [{ "src": "/favicon.ico", "sizes": "16x16" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "type": "image/png",
+      "sizes": "1280x720",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/screenshot-narrow.png",
+      "type": "image/png",
+      "sizes": "750x1334",
+      "form_factor": "narrow"
+    }
+  ]
+}
