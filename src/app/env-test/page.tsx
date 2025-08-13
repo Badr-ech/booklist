@@ -6,8 +6,7 @@ export default function EnvTest() {
   useEffect(() => {
     console.log('=== ENVIRONMENT VARIABLE TEST ===');
     console.log('API Key from env:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-    console.log('Expected API Key:', 'AIzaSyDHeegNk_omjNiEgC2qArnk0sg2oK9vlVI');
-    console.log('Keys match:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY === 'AIzaSyDHeegNk_omjNiEgC2qArnk0sg2oK9vlVI');
+    console.log('Keys match:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY === '<REDACTED>');
     console.log('Project ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
     console.log('Storage Bucket:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
   }, []);
